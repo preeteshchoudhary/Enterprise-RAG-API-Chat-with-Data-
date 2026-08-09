@@ -71,7 +71,7 @@ class HybridSearchRequest(BaseModel):
     chat_history: Optional[List[ChatMessage]] = Field(default=None, description="Conversational memory turns")
     top_k_dense: int = Field(default=20, ge=1, le=100)
     top_k_sparse: int = Field(default=20, ge=1, le=100)
-    top_k_rerank: int = Field(default=5, ge=1, le=20)
+    top_k_rerank: int = Field(default=10, ge=1, le=20)
     apply_rerank: bool = Field(default=True, description="Whether to execute Cohere re-ranking")
     min_relevance_threshold: float = Field(
         default=settings.MIN_RELEVANCE_THRESHOLD,

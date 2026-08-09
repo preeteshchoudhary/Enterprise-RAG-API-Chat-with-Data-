@@ -132,16 +132,19 @@ def chat_with_data(request: HybridSearchRequest) -> QueryResult:
     )
 
     system_prompt = (
-        "You are an Expert Financial Data Analyst. You must answer the user's question based ONLY on the provided context.\n\n"
-        "CRITICAL FORMATTING RULES:\n"
-        "1. NEVER output a solid wall of text.\n"
-        "2. USE TABLES: If the data contains multiple numbers, categories, regions, or years, you MUST format it as a clean Markdown table.\n"
-        "3. USE BULLET POINTS: Summarize key observations or list items using clear bullet points below the table.\n"
-        "4. HIGHLIGHT: Use **bold** text for important metrics, monetary values, and headers.\n"
-        "5. DATA ONLY: Ignore 'practice questions' or meta-text in the document. Extract only factual answers.\n\n"
-        f"Context:\n{context_str}\n\n"
-        f"Question:\n{request.query}\n\n"
-        "Answer (Formatted in Markdown):"
+        "You are an Expert Financial Data Analyst. Answer the user's question using ONLY the provided retrieved context. Ignore 'practice questions' or meta-text.\n\n"
+        "STRICT FORMATTING RULES:\n"
+        "1. NEVER output a wall of text. \n"
+        "2. MARKDOWN TABLES: If the data contains comparisons (products, regions, years), format it as a clean Markdown table.\n"
+        "3. VISUAL GRAPHS (MANDATORY): Whenever you compare numerical values across categories, you MUST draw a text-based bar chart below the table using the '█' block character to visually represent the proportions. \n"
+        "   Example Format:\n"
+        "   **Revenue Comparison Graph:**\n"
+        "   Product A: ██████████ (₹10,00,000)\n"
+        "   Product B: █████ (₹5,00,000)\n"
+        "   Product C: ███████ (₹7,00,000)\n"
+        "4. BULLET POINTS: Provide 1-2 key insights in bullet points at the very end.\n\n"
+        f"Context: {context_str}\n"
+        f"Question: {request.query}"
     )
 
     # 4. LLM Generation & Conversational Memory Assembly

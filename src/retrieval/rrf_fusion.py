@@ -69,18 +69,25 @@ class ReciprocalRankFusion:
         # 3. Sort Chunk IDs by aggregated RRF score in descending order
         sorted_chunk_ids = sorted(rrf_scores.keys(), key=lambda cid: rrf_scores[cid], reverse=True)
 
-        # 4. Construct FusedNode instances
+        # 4. Construct FusedNode instances with content deduplication
         fused_nodes: List[FusedNode] = []
+        seen_content_hashes = set()
+        
         for chunk_id in sorted_chunk_ids:
-            fused_nodes.append(
-                FusedNode(
-                    chunk_id=chunk_id,
-                    content=node_content[chunk_id],
-                    rrf_score=rrf_scores[chunk_id],
-                    dense_rank=dense_ranks.get(chunk_id),
-                    sparse_rank=sparse_ranks.get(chunk_id),
-                    metadata=node_metadata[chunk_id],
+            content_str = node_content[chunk_id].strip().lower()
+            content_hash = hash(content_str)
+            
+            if content_hash not in seen_content_hashes:
+                seen_content_hashes.add(content_hash)
+                fused_nodes.append(
+                    FusedNode(
+                        chunk_id=chunk_id,
+                        content=node_content[chunk_id],
+                        rrf_score=rrf_scores[chunk_id],
+                        dense_rank=dense_ranks.get(chunk_id),
+                        sparse_rank=sparse_ranks.get(chunk_id),
+                        metadata=node_metadata[chunk_id],
+                    )
                 )
-            )
 
         return fused_nodes

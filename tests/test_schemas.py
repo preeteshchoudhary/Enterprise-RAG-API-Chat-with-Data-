@@ -44,7 +44,7 @@ def test_hybrid_search_request_defaults():
     assert req.query == "What is the net revenue?"
     assert req.top_k_dense == 20
     assert req.top_k_sparse == 20
-    assert req.top_k_rerank == 5
+    assert req.top_k_rerank == 10
     assert req.apply_rerank is True
 
 

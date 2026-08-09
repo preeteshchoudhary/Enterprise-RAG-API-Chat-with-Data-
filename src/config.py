@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     TOP_K_DENSE: int = 20
     TOP_K_SPARSE: int = 20
     RRF_K: int = 60
-    TOP_K_RERANK: int = 5
+    TOP_K_RERANK: int = 10
     COHERE_RERANK_MODEL: str = "rerank-v3.5"
     MIN_RELEVANCE_THRESHOLD: float = 0.05
 

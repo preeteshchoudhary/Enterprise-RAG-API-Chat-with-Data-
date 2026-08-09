@@ -18,7 +18,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 # Page configuration
 st.set_page_config(
-    page_title="Enterprise RAG - Staff Portfolio",
+    page_title="LedgerIQ",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -63,7 +63,7 @@ if "messages" not in st.session_state:
     st.session_state.messages = [
         {
             "role": "assistant",
-            "content": "Hello! I am your Enterprise Financial RAG Assistant. Upload a financial report PDF in the sidebar or ask questions about previously ingested documents.",
+            "content": "Hello! I am your LedgerIQ Financial Assistant. Upload a financial report PDF in the sidebar or ask questions about previously ingested documents.",
             "telemetry": None,
             "sources": [],
         }
@@ -167,7 +167,7 @@ with st.sidebar:
     st.markdown("<div style='text-align: center; color: #888888; font-weight: bold;'>Built by PREETESH</div>", unsafe_allow_html=True)
 
 # Main Chat Layout
-st.title("🏛️ Enterprise Financial RAG Platform")
+st.title("🏛️ LedgerIQ Financial Intelligence")
 st.caption("FAANG-Grade AI Orchestration • Hybrid Search (Dense + BM25) • Reciprocal Rank Fusion • Cohere Re-ranking • LangSmith Telemetry")
 
 # Render message history

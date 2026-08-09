@@ -52,6 +52,9 @@ st.markdown(
     .badge-rerank { background: #8B5CF6; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8em; }
     </style>
     """,
+    unsafe_allow_html=True,
+)
+
 import uuid
 import os
 

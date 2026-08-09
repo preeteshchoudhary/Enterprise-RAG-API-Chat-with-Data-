@@ -59,6 +59,63 @@ st.markdown(
 API_URL = os.getenv("API_URL", "http://localhost:8000")
 
 # Initialize session state
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+if "session_id" not in st.session_state:
+    st.session_state.session_id = None
+if "auth_email" not in st.session_state:
+    st.session_state.auth_email = ""
+if "otp_sent" not in st.session_state:
+    st.session_state.otp_sent = False
+
+def render_login():
+    st.title("🔒 LedgerIQ Secure Login")
+    st.markdown("100% Ephemeral Privacy-First Architecture. Your data vanishes when you log out.")
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        email = st.text_input("Work Email Address", value=st.session_state.auth_email)
+        
+        if not st.session_state.otp_sent:
+            if st.button("Request Secure OTP", use_container_width=True):
+                if email:
+                    st.session_state.auth_email = email
+                    try:
+                        res = requests.post(f"{API_URL}/api/v1/auth/request-otp", json={"email": email})
+                        if res.status_code == 200:
+                            st.session_state.otp_sent = True
+                            st.success("OTP Sent! Check your console/email.")
+                            st.rerun()
+                        else:
+                            st.error("Failed to request OTP.")
+                    except Exception as e:
+                        st.error(f"Server offline: {e}")
+                else:
+                    st.warning("Please enter your email.")
+        else:
+            otp = st.text_input("Enter OTP Code", type="password")
+            if st.button("Verify & Login", use_container_width=True):
+                try:
+                    res = requests.post(f"{API_URL}/api/v1/auth/verify-otp", json={"email": st.session_state.auth_email, "otp": otp})
+                    if res.status_code == 200:
+                        data = res.json()
+                        st.session_state.session_id = data["session_id"]
+                        st.session_state.authenticated = True
+                        st.rerun()
+                    else:
+                        st.error("Invalid OTP Code.")
+                except Exception as e:
+                    st.error(f"Login failed: {e}")
+            if st.button("Cancel", use_container_width=True):
+                st.session_state.otp_sent = False
+                st.rerun()
+
+if not st.session_state.authenticated:
+    render_login()
+    st.stop()
+
+# --- Main Authenticated App ---
+
 if "messages" not in st.session_state:
     st.session_state.messages = [
         {
@@ -75,6 +132,19 @@ if "last_ingestion" not in st.session_state:
 # Sidebar - Document Ingestion & Telemetry Dashboard
 with st.sidebar:
     st.title("⚡ System Control Panel")
+    
+    if st.button("🚪 Logout & Securely Wipe Session Data", type="primary", use_container_width=True):
+        try:
+            requests.post(
+                f"{API_URL}/api/v1/auth/logout",
+                headers={"X-Session-ID": st.session_state.session_id}
+            )
+        except Exception:
+            pass
+        st.session_state.clear()
+        st.rerun()
+        
+    st.markdown("---")
     st.markdown("### 📄 Document Ingestion")
     
     uploaded_file = st.file_uploader("Upload 50-Page Financial PDF", type=["pdf"])
@@ -85,7 +155,8 @@ with st.sidebar:
             with st.spinner("Auto-parsing PDF & Executing Semantic Chunking..."):
                 try:
                     files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "application/pdf")}
-                    res = requests.post(f"{API_URL}/api/v1/ingest", files=files, timeout=60)
+                    headers = {"X-Session-ID": st.session_state.session_id}
+                    res = requests.post(f"{API_URL}/api/v1/ingest", files=files, headers=headers, timeout=60)
                     if res.status_code == 200:
                         data = res.json()
                         st.session_state.last_ingestion = data
@@ -93,24 +164,26 @@ with st.sidebar:
                         st.success(f"✓ Automatically indexed {data['chunks_created']} semantic chunks in {data['processing_time_ms']}ms!")
                     else:
                         st.error(f"Ingestion failed: {res.text}")
-                except Exception:
                     from src.ingestion.pdf_loader import PDFLoader
                     from src.ingestion.semantic_chunker import SemanticChunker
-                    from src.api.routes import hybrid_pipeline
-
+                    from src.api.routes import get_session_pipeline
+                    
                     loader = PDFLoader()
-                    chunker = SemanticChunker()
                     pages = loader.load_pdf_bytes(uploaded_file.getvalue(), uploaded_file.name)
+                    chunker = SemanticChunker()
                     chunks = chunker.chunk_document(pages)
-                    hybrid_pipeline.index_chunks(chunks)
-                    st.session_state["current_file"] = uploaded_file.name
+                    pipeline = get_session_pipeline(st.session_state.session_id)
+                    pipeline.index_chunks(chunks)
+                    
                     st.session_state.last_ingestion = {
-                        "document_id": pages[0].doc_id if pages else "doc",
-                        "total_pages_parsed": len(pages),
-                        "chunks_created": len(chunks),
-                        "processing_time_ms": 10.0,
+                        "document_id": pages[0].doc_id,
+                        "pages_parsed": len(pages),
+                        "chunks_created": len(chunks)
                     }
-                    st.success(f"✓ Automatically indexed {len(chunks)} semantic chunks in local vector database!")
+                    st.session_state["current_file"] = uploaded_file.name
+                    st.success(f"✓ Automatically indexed {len(chunks)} chunks using Direct Backend Fallback!")
+                except Exception as e:
+                    st.error(f"Ingestion failed: {e}")
 
         if st.button("Re-Ingest & Re-Index Document", use_container_width=True):
             with st.spinner("Re-parsing PDF & Executing Semantic Chunking..."):
@@ -146,6 +219,7 @@ with st.sidebar:
     top_k_sparse = st.slider("Top K Sparse BM25", 5, 50, 20)
     top_k_rerank = st.slider("Top K Cohere Rerank", 1, 10, 5)
     apply_rerank = st.checkbox("Enable Cohere Re-ranking", value=True)
+    min_relevance = st.slider("Relevance Threshold", 0.0, 1.0, 0.0)
 
     st.divider()
     if st.button("🧪 Run Ragas Evaluation Suite", use_container_width=True):
@@ -212,24 +286,19 @@ if prompt := st.chat_input("Ask a question about financial disclosures, revenues
 
     with st.chat_message("assistant"):
         with st.spinner("Orchestrating Hybrid Retrieval & Re-ranking..."):
-            # Construct chat memory history payload
-            history_payload = [
-                {"role": m["role"], "content": m["content"]}
-                for m in st.session_state.messages[1:-1]
-                if m.get("role") in ["user", "assistant"]
-            ]
-            
+            headers = {"X-Session-ID": st.session_state.session_id}
             payload = {
                 "query": prompt,
-                "chat_history": history_payload,
                 "top_k_dense": top_k_dense,
                 "top_k_sparse": top_k_sparse,
                 "top_k_rerank": top_k_rerank,
                 "apply_rerank": apply_rerank,
+                "min_relevance_threshold": min_relevance,
+                "chat_history": st.session_state.messages[:-1]
             }
             
             try:
-                res = requests.post(f"{API_URL}/api/v1/chat", json=payload, timeout=30)
+                res = requests.post(f"{API_URL}/api/v1/chat", json=payload, headers=headers, timeout=45)
                 if res.status_code == 200:
                     data = res.json()
                     response_text = data["response"]

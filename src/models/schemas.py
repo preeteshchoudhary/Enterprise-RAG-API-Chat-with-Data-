@@ -113,6 +113,19 @@ class RagasEvalMetrics(BaseModel):
     evaluation_timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
+class OTPRequest(BaseModel):
+    email: str = Field(..., description="User's email address")
+
+class OTPVerify(BaseModel):
+    email: str = Field(..., description="User's email address")
+    otp: str = Field(..., description="OTP received by the user")
+
+class AuthResponse(BaseModel):
+    status: str
+    message: str
+    session_id: Optional[str] = None
+
+
 class HealthStatus(BaseModel):
     status: str = "healthy"
     qdrant_connected: bool = True

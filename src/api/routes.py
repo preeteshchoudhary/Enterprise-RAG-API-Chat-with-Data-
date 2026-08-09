@@ -3,8 +3,8 @@ FastAPI Route Definitions for Ingestion, Hybrid Search & Chat, Evaluation, and H
 """
 
 import time
-from typing import List
-from fastapi import APIRouter, UploadFile, File, HTTPException, status
+from typing import List, Dict
+from fastapi import APIRouter, UploadFile, File, HTTPException, status, Header
 from openai import OpenAI
 from src.config import settings
 from src.models.schemas import (
@@ -13,6 +13,9 @@ from src.models.schemas import (
     IngestionResponse,
     RagasEvalMetrics,
     HealthStatus,
+    OTPRequest,
+    OTPVerify,
+    AuthResponse,
 )
 from src.ingestion.pdf_loader import PDFLoader
 from src.ingestion.semantic_chunker import SemanticChunker
@@ -25,8 +28,57 @@ router = APIRouter()
 # Global pipeline instances
 pdf_loader = PDFLoader()
 semantic_chunker = SemanticChunker()
-hybrid_pipeline = HybridRetrievalPipeline()
 ragas_evaluator = RagasEvaluator()
+
+# Session Manager for Ephemeral Privacy-First Architecture
+active_sessions: Dict[str, HybridRetrievalPipeline] = {}
+
+def get_session_pipeline(session_id: str) -> HybridRetrievalPipeline:
+    """Gets or creates a new isolated pipeline for the given session_id."""
+    if not session_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing X-Session-ID header")
+    if session_id not in active_sessions:
+        from src.retrieval.dense_retriever import DenseVectorRetriever
+        from src.retrieval.bm25_retriever import BM25Retriever
+        
+        # Instantiate strictly isolated in-memory stores for this session
+        session_dense = DenseVectorRetriever(collection_name=f"finance_kb_{session_id}")
+        session_sparse = BM25Retriever()
+        
+        active_sessions[session_id] = HybridRetrievalPipeline(
+            dense_retriever=session_dense,
+            sparse_retriever=session_sparse
+        )
+    return active_sessions[session_id]
+
+# Auth Endpoints
+import uuid
+
+mock_otp_db: Dict[str, str] = {}
+
+@router.post("/api/v1/auth/request-otp", response_model=AuthResponse, tags=["Authentication"])
+def request_otp(req: OTPRequest) -> AuthResponse:
+    # MOCK OTP GENERATION
+    otp = "123456" # Static for testing
+    mock_otp_db[req.email] = otp
+    print(f"--- MOCK EMAIL SENT to {req.email}: Your OTP is {otp} ---")
+    return AuthResponse(status="success", message="OTP sent to email (check console)")
+
+@router.post("/api/v1/auth/verify-otp", response_model=AuthResponse, tags=["Authentication"])
+def verify_otp(req: OTPVerify) -> AuthResponse:
+    if mock_otp_db.get(req.email) == req.otp:
+        session_id = str(uuid.uuid4())
+        return AuthResponse(status="success", message="Verified", session_id=session_id)
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid OTP")
+
+@router.post("/api/v1/auth/logout", response_model=AuthResponse, tags=["Authentication"])
+def logout(x_session_id: str = Header(None)) -> AuthResponse:
+    if x_session_id and x_session_id in active_sessions:
+        # Ephemeral Auto-Wipe: destroy the pipeline and its memory footprint
+        del active_sessions[x_session_id]
+        print(f"--- GARBAGE COLLECTED session {x_session_id} ---")
+    return AuthResponse(status="success", message="Session wiped and memory destroyed")
+
 
 openai_client = (
     OpenAI(api_key=settings.OPENAI_API_KEY)
@@ -51,10 +103,10 @@ def get_health() -> HealthStatus:
 
 
 @router.post("/api/v1/ingest", response_model=IngestionResponse, tags=["Document Ingestion"])
-async def ingest_document(file: UploadFile = File(...)) -> IngestionResponse:
+async def ingest_document(file: UploadFile = File(...), x_session_id: str = Header(None)) -> IngestionResponse:
     """
-    Ingests a complex PDF document, performs Semantic Chunking,
-    and indexes chunks in both Qdrant vector database and BM25 search index.
+    Ingests a complex PDF document entirely in-memory and indexes chunks into the user's isolated session store.
+    Zero disk storage is utilized.
     """
     if not file.filename or not file.filename.endswith(".pdf"):
         raise HTTPException(
@@ -67,7 +119,10 @@ async def ingest_document(file: UploadFile = File(...)) -> IngestionResponse:
         content = await file.read()
         parsed_pages = pdf_loader.load_pdf_bytes(content, file.filename)
         chunks = semantic_chunker.chunk_document(parsed_pages)
-        hybrid_pipeline.index_chunks(chunks)
+        
+        # Get isolated session pipeline and index
+        pipeline = get_session_pipeline(x_session_id)
+        pipeline.index_chunks(chunks)
 
         processing_ms = round((time.perf_counter() - t0) * 1000, 2)
         doc_id = parsed_pages[0].doc_id if parsed_pages else "unknown"
@@ -89,15 +144,16 @@ async def ingest_document(file: UploadFile = File(...)) -> IngestionResponse:
 
 @router.post("/api/v1/chat", response_model=QueryResult, tags=["Hybrid RAG Engine"])
 @trace_span("fastapi_chat_endpoint")
-def chat_with_data(request: HybridSearchRequest) -> QueryResult:
+def chat_with_data(request: HybridSearchRequest, x_session_id: str = Header(None)) -> QueryResult:
     """
-    Executes Hybrid Search (Dense + Sparse), Reciprocal Rank Fusion, Cohere Reranking,
-    Relevance Threshold Guardrails, and LLM Context Synthesis with latency telemetry.
+    Executes Hybrid Search (Dense + Sparse) strictly within the user's isolated session.
     """
     t_start = time.perf_counter()
     
+    pipeline = get_session_pipeline(x_session_id)
+    
     # 1. Execute Hybrid Search & Re-ranking Pipeline
-    retrieved_nodes, latencies = hybrid_pipeline.execute_search(request)
+    retrieved_nodes, latencies = pipeline.execute_search(request)
 
     # 2. Relevance Guardrail Threshold Check
     highest_score = retrieved_nodes[0].rerank_score if retrieved_nodes else 0.0
@@ -114,9 +170,10 @@ def chat_with_data(request: HybridSearchRequest) -> QueryResult:
             token_usage={"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
         )
         
+        # PRIVACY-FIRST: Do not log the actual query string or fallback response content.
         global_tracer.log_query_span(
-            query=request.query,
-            response=fallback_result.response,
+            query="[REDACTED FOR PRIVACY]",
+            response="[REDACTED FOR PRIVACY]",
             retrieved_nodes_count=len(retrieved_nodes),
             latencies=latencies,
             token_usage=fallback_result.token_usage,
@@ -209,28 +266,28 @@ def chat_with_data(request: HybridSearchRequest) -> QueryResult:
     latencies["llm_generation_ms"] = llm_ms
     latencies["total_e2e_ms"] = round((time.perf_counter() - t_start) * 1000, 2)
 
-    token_usage = {
-        "prompt_tokens": prompt_tokens,
-        "completion_tokens": completion_tokens,
-        "total_tokens": prompt_tokens + completion_tokens,
-    }
-
-    # 5. Log Observability Telemetry
-    global_tracer.log_query_span(
-        query=request.query,
-        response=response_text,
-        retrieved_nodes_count=len(retrieved_nodes),
-        latencies=latencies,
-        token_usage=token_usage,
-    )
-
-    return QueryResult(
+    final_result = QueryResult(
         query=request.query,
         response=response_text,
         retrieved_nodes=retrieved_nodes,
         latency_metrics=latencies,
-        token_usage=token_usage,
+        token_usage={
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": prompt_tokens + completion_tokens,
+        },
     )
+
+    # 5. Log Observability Telemetry (PRIVACY-FIRST: Do not log content)
+    global_tracer.log_query_span(
+        query="[REDACTED FOR PRIVACY]",
+        response="[REDACTED FOR PRIVACY]",
+        retrieved_nodes_count=len(retrieved_nodes),
+        latencies=latencies,
+        token_usage=final_result.token_usage,
+    )
+
+    return final_result
 
 
 @router.post("/api/v1/evaluate", response_model=RagasEvalMetrics, tags=["Automated Evaluation"])

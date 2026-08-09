@@ -210,6 +210,6 @@ docker-compose up --build
 
 ---
 
-## License & Author
-- **Author**: Principal AI Infrastructure Engineer
+## Author & Credits
+- **Built by PREETESH**
 - **License**: MIT Open Source License

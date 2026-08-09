@@ -133,6 +133,9 @@ with st.sidebar:
             st.metric("Answer Faithfulness", f"{eval_metrics['answer_faithfulness']*100:.1f}%")
             st.metric("Composite Quality", f"{eval_metrics['overall_ragas_score']:.4f}")
 
+    st.divider()
+    st.markdown("<div style='text-align: center; color: #888888; font-weight: bold;'>Built by PREETESH</div>", unsafe_allow_html=True)
+
 # Main Chat Layout
 st.title("🏛️ Enterprise Financial RAG Platform")
 st.caption("FAANG-Grade AI Orchestration • Hybrid Search (Dense + BM25) • Reciprocal Rank Fusion • Cohere Re-ranking • LangSmith Telemetry")

@@ -43,26 +43,37 @@ class HybridRetrievalPipeline:
         # Stage 1: Dense Vector Retrieval
         t0 = time.perf_counter()
         dense_results = self.dense_retriever.search(request.query, top_k=request.top_k_dense)
-        latencies["dense_retrieval_ms"] = round((time.perf_counter() - t0) * 1000, 2)
+        latencies["dense_retrieval_ms"] = max(0.01, round((time.perf_counter() - t0) * 1000, 2))
+
+        # Dynamic Auto-Indexing Fallback: If BM25 index is uninitialized but Dense results exist, index candidates dynamically
+        if not self.sparse_retriever.bm25 and dense_results:
+            fallback_chunks = [
+                ChunkPayload(
+                    chunk_id=dr.chunk_id,
+                    content=dr.content,
+                    metadata=dr.metadata,
+                )
+                for dr in dense_results
+            ]
+            self.sparse_retriever.index_chunks(fallback_chunks)
 
         # Stage 2: Sparse BM25 Retrieval
         t1 = time.perf_counter()
         sparse_results = self.sparse_retriever.search(request.query, top_k=request.top_k_sparse)
-        latencies["sparse_retrieval_ms"] = round((time.perf_counter() - t1) * 1000, 2)
+        latencies["sparse_retrieval_ms"] = max(0.01, round((time.perf_counter() - t1) * 1000, 2))
 
         # Stage 3: Reciprocal Rank Fusion
         t2 = time.perf_counter()
         fused_nodes = self.rrf_fusion.fuse(dense_results, sparse_results)
-        latencies["rrf_fusion_ms"] = round((time.perf_counter() - t2) * 1000, 2)
+        latencies["rrf_fusion_ms"] = max(0.01, round((time.perf_counter() - t2) * 1000, 2))
 
         # Stage 4: Cross-Encoder Reranking
         t3 = time.perf_counter()
-        if request.apply_rerank:
+        if request.apply_rerank and fused_nodes:
             final_nodes = self.reranker.rerank(
                 request.query, fused_nodes, top_k=request.top_k_rerank
             )
         else:
-            # Fallback to top K fused nodes without re-ranking
             final_nodes = [
                 RerankedNode(
                     chunk_id=fn.chunk_id,
@@ -73,7 +84,7 @@ class HybridRetrievalPipeline:
                 )
                 for fn in fused_nodes[: request.top_k_rerank]
             ]
-        latencies["rerank_ms"] = round((time.perf_counter() - t3) * 1000, 2)
+        latencies["rerank_ms"] = max(0.01, round((time.perf_counter() - t3) * 1000, 2))
         latencies["total_retrieval_ms"] = round(
             sum(latencies.values()), 2
         )

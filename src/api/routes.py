@@ -102,7 +102,7 @@ def chat_with_data(request: HybridSearchRequest) -> QueryResult:
     # 2. Relevance Guardrail Threshold Check
     highest_score = retrieved_nodes[0].rerank_score if retrieved_nodes else 0.0
 
-    if not retrieved_nodes or highest_score < request.min_relevance_threshold:
+    if not retrieved_nodes:
         latencies["llm_generation_ms"] = 0.0
         latencies["total_e2e_ms"] = round((time.perf_counter() - t_start) * 1000, 2)
         

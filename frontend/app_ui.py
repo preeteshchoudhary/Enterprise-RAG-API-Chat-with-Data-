@@ -55,15 +55,10 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-import uuid
 import os
 
 # Constants & Backend URL
 API_URL = os.getenv("API_URL", "http://localhost:8000")
-
-# Initialize session state
-if "session_id" not in st.session_state:
-    st.session_state.session_id = str(uuid.uuid4())
 
 # --- Main Authenticated App ---
 
@@ -84,18 +79,6 @@ if "last_ingestion" not in st.session_state:
 with st.sidebar:
     st.title("⚡ System Control Panel")
     
-    if st.button("🧹 Clear Conversation & Memory", type="primary", use_container_width=True):
-        try:
-            requests.post(
-                f"{API_URL}/api/v1/auth/logout",
-                headers={"X-Session-ID": st.session_state.session_id}
-            )
-        except Exception:
-            pass
-        st.session_state.clear()
-        st.rerun()
-        
-    st.markdown("---")
     st.markdown("### 📄 Document Ingestion")
     
     uploaded_file = st.file_uploader("Upload 50-Page Financial PDF", type=["pdf"])
@@ -120,14 +103,13 @@ with st.sidebar:
                     try:
                         from src.ingestion.pdf_loader import PDFLoader
                         from src.ingestion.semantic_chunker import SemanticChunker
-                        from src.api.routes import get_session_pipeline
+                        from src.api.routes import hybrid_pipeline
                         
                         loader = PDFLoader()
                         pages = loader.load_pdf_bytes(uploaded_file.getvalue(), uploaded_file.name)
                         chunker = SemanticChunker()
                         chunks = chunker.chunk_document(pages)
-                        pipeline = get_session_pipeline(st.session_state.session_id)
-                        pipeline.index_chunks(chunks)
+                        hybrid_pipeline.index_chunks(chunks)
                         
                         st.session_state.last_ingestion = {
                             "document_id": pages[0].doc_id,
@@ -143,8 +125,7 @@ with st.sidebar:
             with st.spinner("Re-parsing PDF & Executing Semantic Chunking..."):
                 try:
                     files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "application/pdf")}
-                    headers = {"X-Session-ID": st.session_state.session_id}
-                    res = requests.post(f"{API_URL}/api/v1/ingest", files=files, headers=headers, timeout=60)
+                    res = requests.post(f"{API_URL}/api/v1/ingest", files=files, timeout=60)
                     if res.status_code == 200:
                         data = res.json()
                         st.session_state.last_ingestion = data
@@ -154,14 +135,13 @@ with st.sidebar:
                     try:
                         from src.ingestion.pdf_loader import PDFLoader
                         from src.ingestion.semantic_chunker import SemanticChunker
-                        from src.api.routes import get_session_pipeline
+                        from src.api.routes import hybrid_pipeline
                         
                         loader = PDFLoader()
                         pages = loader.load_pdf_bytes(uploaded_file.getvalue(), uploaded_file.name)
                         chunker = SemanticChunker()
                         chunks = chunker.chunk_document(pages)
-                        pipeline = get_session_pipeline(st.session_state.session_id)
-                        pipeline.index_chunks(chunks)
+                        hybrid_pipeline.index_chunks(chunks)
                         
                         st.session_state.last_ingestion = {
                             "document_id": pages[0].doc_id,
@@ -252,7 +232,6 @@ if prompt := st.chat_input("Ask a question about financial disclosures, revenues
 
     with st.chat_message("assistant"):
         with st.spinner("Orchestrating Hybrid Retrieval & Re-ranking..."):
-            headers = {"X-Session-ID": st.session_state.session_id}
             payload = {
                 "query": prompt,
                 "top_k_dense": top_k_dense,
@@ -264,7 +243,7 @@ if prompt := st.chat_input("Ask a question about financial disclosures, revenues
             }
             
             try:
-                res = requests.post(f"{API_URL}/api/v1/chat", json=payload, headers=headers, timeout=45)
+                res = requests.post(f"{API_URL}/api/v1/chat", json=payload, timeout=45)
                 if res.status_code == 200:
                     data = res.json()
                     response_text = data["response"]
@@ -281,7 +260,7 @@ if prompt := st.chat_input("Ask a question about financial disclosures, revenues
                     from src.api.routes import chat_with_data
 
                     req = HybridSearchRequest(**payload)
-                    result = chat_with_data(req, x_session_id=st.session_state.session_id)
+                    result = chat_with_data(req)
                     response_text = result.response
                     telemetry = result.latency_metrics
                     sources = [node.model_dump() for node in result.retrieved_nodes]

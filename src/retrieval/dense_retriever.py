@@ -27,6 +27,16 @@ class DenseVectorRetriever:
             else None
         )
 
+        # Use sentence-transformers as real local embedding model when OpenAI key is mock
+        self._use_local_model = self.openai_client is None
+        if self._use_local_model:
+            from sentence_transformers import SentenceTransformer
+            self._local_model = SentenceTransformer(settings.LOCAL_EMBEDDING_MODEL)
+            self._embedding_dim = settings.LOCAL_EMBEDDING_DIMENSION
+        else:
+            self._local_model = None
+            self._embedding_dim = settings.EMBEDDING_DIMENSION
+
         if qdrant_client:
             self.qdrant = qdrant_client
         elif settings.QDRANT_IN_MEMORY:
@@ -43,14 +53,14 @@ class DenseVectorRetriever:
             self.qdrant.create_collection(
                 collection_name=self.collection_name,
                 vectors_config=VectorParams(
-                    size=settings.EMBEDDING_DIMENSION,
+                    size=self._embedding_dim,
                     distance=Distance.COSINE,
                 ),
             )
 
     def _get_embedding(self, text: str) -> List[float]:
-        """Calculates embedding vector using OpenAI text-embedding-3-large or local fallback."""
-        if self.openai_client and not settings.OPENAI_API_KEY.startswith("mock"):
+        """Calculates embedding vector using OpenAI text-embedding-3-large or local sentence-transformers model."""
+        if self.openai_client:
             try:
                 res = self.openai_client.embeddings.create(
                     model=settings.EMBEDDING_MODEL,
@@ -60,11 +70,15 @@ class DenseVectorRetriever:
             except Exception as e:
                 print(f"[DenseRetriever] OpenAI embedding fallback due to: {e}")
 
-        # Local pseudo-embedding for testing / offline execution
-        vec = np.zeros(settings.EMBEDDING_DIMENSION, dtype=np.float32)
+        # Use real local sentence-transformers model (all-MiniLM-L6-v2)
+        if self._local_model is not None:
+            return self._local_model.encode(text, normalize_embeddings=True).tolist()
+
+        # Last-resort hash pseudo-embedding (should never reach here)
+        vec = np.zeros(self._embedding_dim, dtype=np.float32)
         words = text.lower().split()
         for idx, word in enumerate(words):
-            w_hash = int(hash(word)) % settings.EMBEDDING_DIMENSION
+            w_hash = int(hash(word)) % self._embedding_dim
             vec[w_hash] += 1.0 / (idx + 1)
         norm = np.linalg.norm(vec)
         if norm > 0:

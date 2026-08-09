@@ -31,6 +31,13 @@ class SemanticChunker:
         self.min_chunk_size = min_chunk_size
         self.max_chunk_size = max_chunk_size
 
+        # Use sentence-transformers as real local embedding model when OpenAI key is mock
+        if self.client is None:
+            from sentence_transformers import SentenceTransformer
+            self._local_model = SentenceTransformer(settings.LOCAL_EMBEDDING_MODEL)
+        else:
+            self._local_model = None
+
     def _split_into_sentences(self, text: str) -> List[str]:
         """Splits raw page text into distinct sentence units using regex boundary rules."""
         sentence_endings = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9])")
@@ -41,7 +48,8 @@ class SemanticChunker:
     def _get_sentence_embeddings(self, sentences: List[str]) -> np.ndarray:
         """
         Calculates embeddings for sentences.
-        Uses OpenAI text-embedding-3-large if API key available, else deterministic local heuristic vector.
+        Uses OpenAI text-embedding-3-large if API key available,
+        else uses real local sentence-transformers (all-MiniLM-L6-v2).
         """
         if self.client and not settings.OPENAI_API_KEY.startswith("mock"):
             try:
@@ -54,10 +62,14 @@ class SemanticChunker:
             except Exception as e:
                 print(f"[SemanticChunker] OpenAI embedding call fallback due to: {e}")
 
-        # Fallback local pseudo-embedding representation for testing / offline execution
+        # Real local sentence-transformers model (all-MiniLM-L6-v2)
+        if self._local_model is not None:
+            embeddings = self._local_model.encode(sentences, normalize_embeddings=True)
+            return np.array(embeddings, dtype=np.float32)
+
+        # Last-resort: hash pseudo-embedding (should never reach here)
         embeddings = []
         for s in sentences:
-            # Deterministic pseudo-embedding based on hash & token features
             vec = np.zeros(128, dtype=np.float32)
             words = s.lower().split()
             for idx, word in enumerate(words):

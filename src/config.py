@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     # LLM & Embedding Settings
     EMBEDDING_MODEL: str = "text-embedding-3-large"
     EMBEDDING_DIMENSION: int = 3072
+    LOCAL_EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"  # Free local model via sentence-transformers
+    LOCAL_EMBEDDING_DIMENSION: int = 384              # Dimension of all-MiniLM-L6-v2
     LLM_MODEL: str = "gpt-4o"
     LLM_TEMPERATURE: float = 0.0
 

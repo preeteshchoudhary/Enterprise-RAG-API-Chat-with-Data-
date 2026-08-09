@@ -52,67 +52,15 @@ st.markdown(
     .badge-rerank { background: #8B5CF6; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8em; }
     </style>
     """,
-    unsafe_allow_html=True,
-)
+import uuid
+import os
 
 # Constants & Backend URL
 API_URL = os.getenv("API_URL", "http://localhost:8000")
 
 # Initialize session state
-if "authenticated" not in st.session_state:
-    st.session_state.authenticated = False
 if "session_id" not in st.session_state:
-    st.session_state.session_id = None
-if "auth_email" not in st.session_state:
-    st.session_state.auth_email = ""
-if "otp_sent" not in st.session_state:
-    st.session_state.otp_sent = False
-
-def render_login():
-    st.title("🔒 LedgerIQ Secure Login")
-    st.markdown("100% Ephemeral Privacy-First Architecture. Your data vanishes when you log out.")
-    
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        email = st.text_input("Work Email Address", value=st.session_state.auth_email)
-        
-        if not st.session_state.otp_sent:
-            if st.button("Request Secure OTP", use_container_width=True):
-                if email:
-                    st.session_state.auth_email = email
-                    try:
-                        res = requests.post(f"{API_URL}/api/v1/auth/request-otp", json={"email": email})
-                        if res.status_code == 200:
-                            st.session_state.otp_sent = True
-                            st.success("OTP Sent! Check your console/email.")
-                            st.rerun()
-                        else:
-                            st.error("Failed to request OTP.")
-                    except Exception as e:
-                        st.error(f"Server offline: {e}")
-                else:
-                    st.warning("Please enter your email.")
-        else:
-            otp = st.text_input("Enter OTP Code", type="password")
-            if st.button("Verify & Login", use_container_width=True):
-                try:
-                    res = requests.post(f"{API_URL}/api/v1/auth/verify-otp", json={"email": st.session_state.auth_email, "otp": otp})
-                    if res.status_code == 200:
-                        data = res.json()
-                        st.session_state.session_id = data["session_id"]
-                        st.session_state.authenticated = True
-                        st.rerun()
-                    else:
-                        st.error("Invalid OTP Code.")
-                except Exception as e:
-                    st.error(f"Login failed: {e}")
-            if st.button("Cancel", use_container_width=True):
-                st.session_state.otp_sent = False
-                st.rerun()
-
-if not st.session_state.authenticated:
-    render_login()
-    st.stop()
+    st.session_state.session_id = str(uuid.uuid4())
 
 # --- Main Authenticated App ---
 
@@ -133,7 +81,7 @@ if "last_ingestion" not in st.session_state:
 with st.sidebar:
     st.title("⚡ System Control Panel")
     
-    if st.button("🚪 Logout & Securely Wipe Session Data", type="primary", use_container_width=True):
+    if st.button("🧹 Clear Conversation & Memory", type="primary", use_container_width=True):
         try:
             requests.post(
                 f"{API_URL}/api/v1/auth/logout",

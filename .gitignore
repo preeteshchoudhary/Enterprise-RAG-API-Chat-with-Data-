@@ -1,0 +1,28 @@
+# Python Virtual Environment & Caches
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+
+# Environment Variables & Secrets
+.env
+.env.local
+*.pem
+*.key
+
+# System & OS Files
+.DS_Store
+Thumbs.db
+
+# IDE Files
+.vscode/
+.idea/
+
+# Qdrant Storage Data
+qdrant_storage/

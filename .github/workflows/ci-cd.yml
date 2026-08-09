@@ -1,0 +1,64 @@
+name: CI/CD Pipeline - Enterprise RAG System
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  lint-and-test:
+    name: Lint, Type Check & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio ruff mypy
+
+      - name: Run Ruff Code Linter
+        run: |
+          ruff check src/
+
+      - name: Run Mypy Type Checker
+        run: |
+          mypy src/ --ignore-missing-imports
+
+      - name: Execute Automated Test Suite
+        run: |
+          pytest tests/ -v --junitxml=test-results.xml
+        env:
+          OPENAI_API_KEY: "mock-openai-key"
+          COHERE_API_KEY: "mock-cohere-key"
+
+  docker-build:
+    name: Build & Push Production Docker Image
+    needs: lint-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker Container Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          tags: enterprise-rag-system:latest

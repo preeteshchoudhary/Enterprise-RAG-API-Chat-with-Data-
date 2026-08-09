@@ -132,9 +132,14 @@ def chat_with_data(request: HybridSearchRequest) -> QueryResult:
     )
 
     system_prompt = (
-        "You are an expert Enterprise AI Financial Analyst. Synthesize a clear, direct, and conversational answer "
-        "to the user's question using strictly the provided context below. "
-        "Do NOT copy-paste raw text chunks verbatim; rewrite into a polished response citing source pages and headers.\n\n"
+        "You are an Expert Financial Data Analyst. Synthesize a clear, structured, and highly professional "
+        "response to the user's question using strictly the provided context below.\n\n"
+        "STRICT FORMATTING RULES:\n"
+        "1. ALWAYS USE MARKDOWN: Never output a giant wall of unformatted text.\n"
+        "2. RECONSTRUCT TABLES: If the retrieved context contains tabular data, ledger rows, or financial metrics across years, reconstruct them into clean Markdown tables.\n"
+        "3. USE BULLET POINTS: Break down key observations, lists, or multi-part financial items into clear bullet points.\n"
+        "4. BOLD KEY METRICS: Highlight key numerical values, revenues, net profits, growth percentages, and critical terms in **bold**.\n"
+        "5. SOURCE CITATIONS: Explicitly cite source pages and section headers when referencing facts.\n\n"
         f"CONTEXT:\n{context_str}"
     )
 
@@ -165,13 +170,21 @@ def chat_with_data(request: HybridSearchRequest) -> QueryResult:
         except Exception as e:
             response_text = f"Context retrieved successfully. LLM synthesis error: {e}"
     else:
-        # High-quality offline conversational synthesis engine
-        time.sleep(0.05)  # Simulate real synthesis duration for offline execution profiling
+        # High-quality Data Analyst offline markdown synthesis engine
+        time.sleep(0.05)
         top_node = retrieved_nodes[0]
+        
         response_text = (
-            f"Based on the financial disclosures in {top_node.metadata.document_title} "
-            f"(Section: {top_node.metadata.header}, Page {top_node.metadata.page_number}):\n\n"
-            f"The document states that {top_node.content.strip()}"
+            f"### 📊 Financial Analysis Summary\n"
+            f"**Source**: `{top_node.metadata.document_title}` | **Page**: `{top_node.metadata.page_number}` | **Header**: `{top_node.metadata.header}`\n\n"
+            f"#### 🔍 Key Observations:\n"
+            f"- **Primary Context Finding**: {top_node.content.strip()}\n"
+            f"- **Relevance Score**: **{top_node.rerank_score:.4f}**\n\n"
+            f"| Metric / Disclosure | Details |\n"
+            f"| :--- | :--- |\n"
+            f"| **Section Header** | `{top_node.metadata.header}` |\n"
+            f"| **Page Reference** | Page {top_node.metadata.page_number} |\n"
+            f"| **Relevance Score** | **{top_node.rerank_score:.4f}** |\n"
         )
         completion_tokens = len(response_text.split())
 

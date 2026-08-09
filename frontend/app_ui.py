@@ -50,6 +50,18 @@ st.markdown(
     .badge-dense { background: #3B82F6; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8em; }
     .badge-sparse { background: #10B981; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8em; }
     .badge-rerank { background: #8B5CF6; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8em; }
+    
+    /* Enhance readability and professional look */
+    .stChatMessage {
+        font-size: 1.15rem;
+        line-height: 1.6;
+    }
+    .stChatMessage h2 {
+        font-size: 2.2rem;
+        font-weight: 800;
+        color: #4ade80; /* vibrant green for the answer */
+        margin-bottom: 0.5rem;
+    }
     </style>
     """,
     unsafe_allow_html=True,

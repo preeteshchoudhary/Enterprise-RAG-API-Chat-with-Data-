@@ -45,6 +45,11 @@ class PDFLoader:
             page_number = page_idx + 1
             extracted_text = page.extract_text() or ""
             
+            # Exclusion filter: skip pages that contain practice questions or data dictionary tests
+            lower_text = extracted_text.lower()
+            if "data dictionary & analysis test" in lower_text or "practice questions" in lower_text:
+                continue
+            
             # Detect section headers within the page text
             lines = [line.strip() for line in extracted_text.split("\n") if line.strip()]
             for line in lines[:5]:  # Inspect first few lines of page

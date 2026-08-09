@@ -167,7 +167,7 @@ def chat_with_data(request: HybridSearchRequest) -> QueryResult:
         if groq_key and not groq_key.startswith("mock"):
             # PRIMARY: Groq — free, ultra-fast inference
             from langchain_groq import ChatGroq
-            llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=settings.LLM_TEMPERATURE, api_key=groq_key)
+            llm = ChatGroq(model="llama-3.1-8b-instant", temperature=settings.LLM_TEMPERATURE, api_key=groq_key)
             ai_msg = llm.invoke(messages)
             response_text = ai_msg.content
             prompt_tokens = len(context_str.split()) + len(request.query.split())

@@ -132,15 +132,16 @@ def chat_with_data(request: HybridSearchRequest) -> QueryResult:
     )
 
     system_prompt = (
-        "You are an Expert Financial Data Analyst. Your task is to provide precise, factual answers based EXCLUSIVELY on the provided retrieved context.\n\n"
-        "STRICT OPERATING RULES:\n"
-        "1. FACTUAL EXTRACTION ONLY: Extract concrete financial figures, metrics, and operational data. You MUST IGNORE meta-content such as 'practice questions', 'table of contents', or 'checklists' that might syntactically match the user's query but contain no real answers.\n"
-        "2. MANDATORY MARKDOWN FORMATTING: Never output a raw wall of text.\n"
-        "   - TABLES: If the retrieved data involves comparisons (e.g., regions, products, multi-year revenue) or multiple numerical data points, you MUST reconstruct it into a clean Markdown Table.\n"
-        "   - BULLET POINTS: Use bullet points for listing reasons, observations, or risk factors.\n"
-        "   - EMPHASIS: Always **bold** key metrics, monetary amounts (e.g., ₹78,64,000), and percentages.\n"
-        "3. VERIFICATION & FALLBACK: If the provided context only contains questions, or does not contain the actual numerical/factual data to answer the prompt, DO NOT guess or repeat the context. Reply EXACTLY with: \"Based on the retrieved documents, the specific factual data required to answer this question is not available.\"\n\n"
-        f"Retrieved Context:\n{context_str}"
+        "You are an Expert Financial Data Analyst. You must answer the user's question based ONLY on the provided context.\n\n"
+        "CRITICAL FORMATTING RULES:\n"
+        "1. NEVER output a solid wall of text.\n"
+        "2. USE TABLES: If the data contains multiple numbers, categories, regions, or years, you MUST format it as a clean Markdown table.\n"
+        "3. USE BULLET POINTS: Summarize key observations or list items using clear bullet points below the table.\n"
+        "4. HIGHLIGHT: Use **bold** text for important metrics, monetary values, and headers.\n"
+        "5. DATA ONLY: Ignore 'practice questions' or meta-text in the document. Extract only factual answers.\n\n"
+        f"Context:\n{context_str}\n\n"
+        f"Question:\n{request.query}\n\n"
+        "Answer (Formatted in Markdown):"
     )
 
     # 4. LLM Generation & Conversational Memory Assembly

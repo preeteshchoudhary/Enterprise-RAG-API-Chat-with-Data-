@@ -15,6 +15,7 @@ class Settings(BaseSettings):
 
     # API Keys & Endpoints
     OPENAI_API_KEY: str = "mock-openai-key"
+    GROQ_API_KEY: Optional[str] = None
     COHERE_API_KEY: Optional[str] = "mock-cohere-key"
     
     # Qdrant Vector Store Config

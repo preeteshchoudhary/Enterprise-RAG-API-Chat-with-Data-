@@ -22,21 +22,16 @@ class SemanticChunker:
         min_chunk_size: int = settings.MIN_CHUNK_SIZE,
         max_chunk_size: int = settings.MAX_CHUNK_SIZE,
     ) -> None:
-        self.client = openai_client or (
-            OpenAI(api_key=settings.OPENAI_API_KEY)
-            if settings.OPENAI_API_KEY and not settings.OPENAI_API_KEY.startswith("mock")
-            else None
-        )
+        # Always use local sentence-transformers for fast sentence-level chunking.
+        # OpenAI embeddings are expensive (500+ API calls per doc) for this step.
+        # The dense retriever handles OpenAI embeddings at the chunk level (13 calls, not 500+).
+        self.client = None
         self.breakpoint_percentile = breakpoint_percentile
         self.min_chunk_size = min_chunk_size
         self.max_chunk_size = max_chunk_size
 
-        # Use sentence-transformers as real local embedding model when OpenAI key is mock
-        if self.client is None:
-            from sentence_transformers import SentenceTransformer
-            self._local_model = SentenceTransformer(settings.LOCAL_EMBEDDING_MODEL)
-        else:
-            self._local_model = None
+        from sentence_transformers import SentenceTransformer
+        self._local_model = SentenceTransformer(settings.LOCAL_EMBEDDING_MODEL)
 
     def _split_into_sentences(self, text: str) -> List[str]:
         """Splits raw page text into distinct sentence units using regex boundary rules."""

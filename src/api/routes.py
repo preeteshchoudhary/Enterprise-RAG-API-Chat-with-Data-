@@ -143,68 +143,58 @@ def chat_with_data(request: HybridSearchRequest) -> QueryResult:
     prompt_tokens = 0
     completion_tokens = 0
 
-    try:
-        if settings.OPENAI_API_KEY.startswith("mock"):
-            # Smart context-aware offline synthesizer
-            # Reads REAL retrieved chunks and formats them into structured Markdown
-            time.sleep(0.8)
+        from langchain_core.messages import SystemMessage, HumanMessage
 
-            sections = []
-            sections.append("### 📊 Financial Analysis Report")
-            sections.append(f"> **Query:** {request.query}\n")
-            sections.append("---")
+        # Build message chain
+        messages = [SystemMessage(content=system_prompt)]
+        if request.chat_history:
+            for turn in request.chat_history:
+                if turn.role == "user":
+                    messages.append(HumanMessage(content=turn.content))
+                else:
+                    messages.append(SystemMessage(content=turn.content))
+        human_content = f"Context:\n{context_str}\n\nQuestion: {request.query}"
+        messages.append(HumanMessage(content=human_content))
 
-            # Collect all retrieved content, clean it, and present it
-            for i, node in enumerate(retrieved_nodes[:5], 1):
-                raw = node.content.strip().replace("\n", " ")
-                # Clean up squished text by inserting line breaks after Indian Rupee patterns
-                import re
-                raw = re.sub(r'(₹[\d,]+)', r'\n- **\1**', raw)
-                raw = re.sub(r'(\d{1,2}\.\d+%)', r'**\1**', raw)
+        groq_key = settings.GROQ_API_KEY if hasattr(settings, "GROQ_API_KEY") and settings.GROQ_API_KEY else None
 
-                sections.append(f"#### 📄 Source {i}: {node.metadata.header}")
-                sections.append(f"*Page {node.metadata.page_number} | {node.metadata.document_title}*\n")
-                sections.append(raw.strip())
-                sections.append("")
-
-            sections.append("---")
-            sections.append("#### 🔍 Key Insights")
-            sections.append(f"- Top {len(retrieved_nodes)} semantically relevant chunks were retrieved and ranked.")
-            sections.append(f"- Highest relevance score: **{retrieved_nodes[0].rerank_score:.4f}** (Source: Page {retrieved_nodes[0].metadata.page_number})")
-            sections.append("\n> ⚠️ *Note: Add a valid OpenAI API key in your `.env` file to enable full LLM synthesis with auto-generated tables and bar charts.*")
-
-            response_text = "\n".join(sections)
-            prompt_tokens = len(context_str.split()) + len(request.query.split()) + 50
-            completion_tokens = len(response_text.split())
-        else:
-            from langchain_openai import ChatOpenAI
-            from langchain_core.messages import SystemMessage, HumanMessage
-
-            llm = ChatOpenAI(
-                model=settings.LLM_MODEL,
-                temperature=settings.LLM_TEMPERATURE,
-                api_key=settings.OPENAI_API_KEY
-            )
-
-            messages = [SystemMessage(content=system_prompt)]
-            
-            if request.chat_history:
-                for turn in request.chat_history:
-                    if turn.role == "user":
-                        messages.append(HumanMessage(content=turn.content))
-                    else:
-                        messages.append(SystemMessage(content=turn.content))
-                        
-            human_content = f"Context: {context_str} \n\n Question: {request.query}"
-            messages.append(HumanMessage(content=human_content))
-
+        if groq_key and not groq_key.startswith("mock"):
+            # PRIMARY: Groq — free, ultra-fast inference
+            from langchain_groq import ChatGroq
+            llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=settings.LLM_TEMPERATURE, api_key=groq_key)
             ai_msg = llm.invoke(messages)
             response_text = ai_msg.content
-            
+            prompt_tokens = len(context_str.split()) + len(request.query.split())
+            completion_tokens = len(response_text.split())
+        elif not settings.OPENAI_API_KEY.startswith("mock"):
+            # SECONDARY: OpenAI GPT-4o (if credits available)
+            from langchain_openai import ChatOpenAI
+            llm = ChatOpenAI(model=settings.LLM_MODEL, temperature=settings.LLM_TEMPERATURE, api_key=settings.OPENAI_API_KEY)
+            ai_msg = llm.invoke(messages)
+            response_text = ai_msg.content
             if hasattr(ai_msg, 'response_metadata') and 'token_usage' in ai_msg.response_metadata:
                 usage = ai_msg.response_metadata['token_usage']
                 prompt_tokens = usage.get('prompt_tokens', 0)
                 completion_tokens = usage.get('completion_tokens', 0)
+        else:
+            # OFFLINE: Smart context synthesizer (no API key needed)
+            time.sleep(0.8)
+            sections = ["### 📊 Financial Analysis Report", f"> **Query:** {request.query}\n", "---"]
+            for i, node in enumerate(retrieved_nodes[:5], 1):
+                import re
+                raw = node.content.strip().replace("\n", " ")
+                raw = re.sub(r'(₹[\d,]+)', r'\n- **\1**', raw)
+                raw = re.sub(r'(\d{1,2}\.\d+%)', r'**\1**', raw)
+                sections.append(f"#### 📄 Source {i}: {node.metadata.header}")
+                sections.append(f"*Page {node.metadata.page_number} | {node.metadata.document_title}*\n")
+                sections.append(raw.strip())
+                sections.append("")
+            sections.append("---")
+            sections.append(f"#### 🔍 Key Insights")
+            sections.append(f"- Top {len(retrieved_nodes)} chunks retrieved. Highest score: **{retrieved_nodes[0].rerank_score:.4f}** (Page {retrieved_nodes[0].metadata.page_number})")
+            response_text = "\n".join(sections)
+            prompt_tokens = len(context_str.split()) + len(request.query.split()) + 50
+            completion_tokens = len(response_text.split())
     except Exception as e:
         response_text = f"Context retrieved successfully. LLM synthesis error: {e}"
 

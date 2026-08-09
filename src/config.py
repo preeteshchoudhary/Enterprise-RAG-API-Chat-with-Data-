@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     RRF_K: int = 60
     TOP_K_RERANK: int = 5
     COHERE_RERANK_MODEL: str = "rerank-v3.5"
+    MIN_RELEVANCE_THRESHOLD: float = 0.15
 
     # Observability & Tracing
     LANGCHAIN_TRACING_V2: bool = True

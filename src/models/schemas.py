@@ -5,6 +5,7 @@ Strict Pydantic v2 schemas for document metadata, chunks, retrieval nodes, and e
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 from pydantic import BaseModel, Field, ConfigDict
+from src.config import settings
 
 
 class DocumentMetadata(BaseModel):
@@ -72,6 +73,12 @@ class HybridSearchRequest(BaseModel):
     top_k_sparse: int = Field(default=20, ge=1, le=100)
     top_k_rerank: int = Field(default=5, ge=1, le=20)
     apply_rerank: bool = Field(default=True, description="Whether to execute Cohere re-ranking")
+    min_relevance_threshold: float = Field(
+        default=settings.MIN_RELEVANCE_THRESHOLD,
+        ge=0.0,
+        le=1.0,
+        description="Minimum rerank relevance score threshold required to trigger LLM synthesis"
+    )
 
 
 class QueryResult(BaseModel):

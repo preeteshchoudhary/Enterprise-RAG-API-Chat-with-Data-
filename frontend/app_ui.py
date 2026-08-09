@@ -115,47 +115,62 @@ with st.sidebar:
                         st.success(f"✓ Automatically indexed {data['chunks_created']} semantic chunks in {data['processing_time_ms']}ms!")
                     else:
                         st.error(f"Ingestion failed: {res.text}")
-                    from src.ingestion.pdf_loader import PDFLoader
-                    from src.ingestion.semantic_chunker import SemanticChunker
-                    from src.api.routes import get_session_pipeline
-                    
-                    loader = PDFLoader()
-                    pages = loader.load_pdf_bytes(uploaded_file.getvalue(), uploaded_file.name)
-                    chunker = SemanticChunker()
-                    chunks = chunker.chunk_document(pages)
-                    pipeline = get_session_pipeline(st.session_state.session_id)
-                    pipeline.index_chunks(chunks)
-                    
-                    st.session_state.last_ingestion = {
-                        "document_id": pages[0].doc_id,
-                        "pages_parsed": len(pages),
-                        "chunks_created": len(chunks)
-                    }
-                    st.session_state["current_file"] = uploaded_file.name
-                    st.success(f"✓ Automatically indexed {len(chunks)} chunks using Direct Backend Fallback!")
                 except Exception as e:
-                    st.error(f"Ingestion failed: {e}")
+                    st.warning("Backend API unreachable. Falling back to local embedded RAG engine...")
+                    try:
+                        from src.ingestion.pdf_loader import PDFLoader
+                        from src.ingestion.semantic_chunker import SemanticChunker
+                        from src.api.routes import get_session_pipeline
+                        
+                        loader = PDFLoader()
+                        pages = loader.load_pdf_bytes(uploaded_file.getvalue(), uploaded_file.name)
+                        chunker = SemanticChunker()
+                        chunks = chunker.chunk_document(pages)
+                        pipeline = get_session_pipeline(st.session_state.session_id)
+                        pipeline.index_chunks(chunks)
+                        
+                        st.session_state.last_ingestion = {
+                            "document_id": pages[0].doc_id,
+                            "pages_parsed": len(pages),
+                            "chunks_created": len(chunks)
+                        }
+                        st.session_state["current_file"] = uploaded_file.name
+                        st.success(f"✓ Automatically indexed {len(chunks)} chunks using Direct Backend Fallback!")
+                    except Exception as fallback_e:
+                        st.error(f"Fallback ingestion failed: {fallback_e}")
 
         if st.button("Re-Ingest & Re-Index Document", use_container_width=True):
             with st.spinner("Re-parsing PDF & Executing Semantic Chunking..."):
                 try:
                     files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "application/pdf")}
-                    res = requests.post(f"{API_URL}/api/v1/ingest", files=files, timeout=60)
+                    headers = {"X-Session-ID": st.session_state.session_id}
+                    res = requests.post(f"{API_URL}/api/v1/ingest", files=files, headers=headers, timeout=60)
                     if res.status_code == 200:
                         data = res.json()
                         st.session_state.last_ingestion = data
                         st.success(f"Successfully re-indexed {data['chunks_created']} semantic chunks!")
-                except Exception:
-                    from src.ingestion.pdf_loader import PDFLoader
-                    from src.ingestion.semantic_chunker import SemanticChunker
-                    from src.api.routes import hybrid_pipeline
-
-                    loader = PDFLoader()
-                    chunker = SemanticChunker()
-                    pages = loader.load_pdf_bytes(uploaded_file.getvalue(), uploaded_file.name)
-                    chunks = chunker.chunk_document(pages)
-                    hybrid_pipeline.index_chunks(chunks)
-                    st.success(f"Re-indexed {len(chunks)} semantic chunks in local vector database!")
+                except Exception as e:
+                    st.warning("Backend API unreachable. Falling back to local embedded RAG engine...")
+                    try:
+                        from src.ingestion.pdf_loader import PDFLoader
+                        from src.ingestion.semantic_chunker import SemanticChunker
+                        from src.api.routes import get_session_pipeline
+                        
+                        loader = PDFLoader()
+                        pages = loader.load_pdf_bytes(uploaded_file.getvalue(), uploaded_file.name)
+                        chunker = SemanticChunker()
+                        chunks = chunker.chunk_document(pages)
+                        pipeline = get_session_pipeline(st.session_state.session_id)
+                        pipeline.index_chunks(chunks)
+                        
+                        st.session_state.last_ingestion = {
+                            "document_id": pages[0].doc_id,
+                            "pages_parsed": len(pages),
+                            "chunks_created": len(chunks)
+                        }
+                        st.success(f"Re-indexed {len(chunks)} semantic chunks using Direct Backend Fallback!")
+                    except Exception as fallback_e:
+                        st.error(f"Fallback ingestion failed: {fallback_e}")
 
     if st.session_state.last_ingestion:
         st.markdown("#### Last Ingestion Summary")
@@ -261,14 +276,19 @@ if prompt := st.chat_input("Ask a question about financial disclosures, revenues
                     sources = []
             except Exception:
                 # Direct in-process execution fallback
-                from src.models.schemas import HybridSearchRequest
-                from src.api.routes import chat_with_data
+                try:
+                    from src.models.schemas import HybridSearchRequest
+                    from src.api.routes import chat_with_data
 
-                req = HybridSearchRequest(**payload)
-                result = chat_with_data(req)
-                response_text = result.response
-                telemetry = result.latency_metrics
-                sources = [node.model_dump() for node in result.retrieved_nodes]
+                    req = HybridSearchRequest(**payload)
+                    result = chat_with_data(req, x_session_id=st.session_state.session_id)
+                    response_text = result.response
+                    telemetry = result.latency_metrics
+                    sources = [node.model_dump() for node in result.retrieved_nodes]
+                except Exception as fallback_e:
+                    response_text = f"Fallback API Error: {fallback_e}"
+                    telemetry = None
+                    sources = []
 
             st.markdown(response_text)
             

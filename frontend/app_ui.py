@@ -204,34 +204,33 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
         
-        # Render telemetry breakdown if available
-        if msg.get("telemetry"):
-            tel = msg["telemetry"]
-            st.markdown("##### ⏱️ Latency & Telemetry Breakdown")
-            col1, col2, col3, col4, col5 = st.columns(5)
-            col1.metric("Dense Search", f"{tel.get('dense_retrieval_ms', 0):.1f} ms")
-            col2.metric("Sparse BM25", f"{tel.get('sparse_retrieval_ms', 0):.1f} ms")
-            col3.metric("RRF Fusion", f"{tel.get('rrf_fusion_ms', 0):.1f} ms")
-            col4.metric("Cohere Rerank", f"{tel.get('rerank_ms', 0):.1f} ms")
-            col5.metric("LLM Gen", f"{tel.get('llm_generation_ms', 0):.1f} ms")
+        # --- UI Cleanup: Hiding telemetry and raw sources from the frontend ---
+        # if msg.get("telemetry"):
+        #     tel = msg["telemetry"]
+        #     st.markdown("##### ⏱️ Latency & Telemetry Breakdown")
+        #     col1, col2, col3, col4, col5 = st.columns(5)
+        #     col1.metric("Dense Search", f"{tel.get('dense_retrieval_ms', 0):.1f} ms")
+        #     col2.metric("Sparse BM25", f"{tel.get('sparse_retrieval_ms', 0):.1f} ms")
+        #     col3.metric("RRF Fusion", f"{tel.get('rrf_fusion_ms', 0):.1f} ms")
+        #     col4.metric("Cohere Rerank", f"{tel.get('rerank_ms', 0):.1f} ms")
+        #     col5.metric("LLM Gen", f"{tel.get('llm_generation_ms', 0):.1f} ms")
 
-        # Render retrieved context sources
-        if msg.get("sources"):
-            with st.expander(f"📚 Source Attribution & Reranked Contexts ({len(msg['sources'])} nodes)"):
-                for idx, node in enumerate(msg["sources"], start=1):
-                    meta = node.get("metadata", {})
-                    st.markdown(
-                        f"""
-                        <div class="source-chip">
-                            <strong>Node #{idx}</strong> | <em>{meta.get('document_title', 'Doc')}</em> | 
-                            Page {meta.get('page_number', '1')} | Header: <code>{meta.get('header', 'General')}</code><br/>
-                            <span class="badge-rerank">Rerank Score: {node.get('rerank_score', 0):.4f}</span>
-                            <span class="badge-dense">RRF Score: {node.get('rrf_score', 0):.4f}</span>
-                            <p style="margin-top: 6px;">"{node.get('content', '')}"</p>
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
+        # if msg.get("sources"):
+        #     with st.expander(f"📚 Source Attribution & Reranked Contexts ({len(msg['sources'])} nodes)"):
+        #         for idx, node in enumerate(msg["sources"], start=1):
+        #             meta = node.get("metadata", {})
+        #             st.markdown(
+        #                 f"""
+        #                 <div class="source-chip">
+        #                     <strong>Node #{idx}</strong> | <em>{meta.get('document_title', 'Doc')}</em> | 
+        #                     Page {meta.get('page_number', '1')} | Header: <code>{meta.get('header', 'General')}</code><br/>
+        #                     <span class="badge-rerank">Rerank Score: {node.get('rerank_score', 0):.4f}</span>
+        #                     <span class="badge-dense">RRF Score: {node.get('rrf_score', 0):.4f}</span>
+        #                     <p style="margin-top: 6px;">"{node.get('content', '')}"</p>
+        #                 </div>
+        #                 """,
+        #                 unsafe_allow_html=True,
+        #             )
 
 # Chat Input Box
 if prompt := st.chat_input("Ask a question about financial disclosures, revenues, or risk factors..."):
@@ -280,31 +279,32 @@ if prompt := st.chat_input("Ask a question about financial disclosures, revenues
 
             st.markdown(response_text)
             
-            if telemetry:
-                st.markdown("##### ⏱️ Latency & Telemetry Breakdown")
-                col1, col2, col3, col4, col5 = st.columns(5)
-                col1.metric("Dense Search", f"{telemetry.get('dense_retrieval_ms', 0):.1f} ms")
-                col2.metric("Sparse BM25", f"{telemetry.get('sparse_retrieval_ms', 0):.1f} ms")
-                col3.metric("RRF Fusion", f"{telemetry.get('rrf_fusion_ms', 0):.1f} ms")
-                col4.metric("Cohere Rerank", f"{telemetry.get('rerank_ms', 0):.1f} ms")
-                col5.metric("LLM Gen", f"{telemetry.get('llm_generation_ms', 0):.1f} ms")
+            # --- UI Cleanup: Hiding telemetry and raw sources from the frontend ---
+            # if telemetry:
+            #     st.markdown("##### ⏱️ Latency & Telemetry Breakdown")
+            #     col1, col2, col3, col4, col5 = st.columns(5)
+            #     col1.metric("Dense Search", f"{telemetry.get('dense_retrieval_ms', 0):.1f} ms")
+            #     col2.metric("Sparse BM25", f"{telemetry.get('sparse_retrieval_ms', 0):.1f} ms")
+            #     col3.metric("RRF Fusion", f"{telemetry.get('rrf_fusion_ms', 0):.1f} ms")
+            #     col4.metric("Cohere Rerank", f"{telemetry.get('rerank_ms', 0):.1f} ms")
+            #     col5.metric("LLM Gen", f"{telemetry.get('llm_generation_ms', 0):.1f} ms")
 
-            if sources:
-                with st.expander(f"📚 Source Attribution & Reranked Contexts ({len(sources)} nodes)"):
-                    for idx, node in enumerate(sources, start=1):
-                        meta = node.get("metadata", {})
-                        st.markdown(
-                            f"""
-                            <div class="source-chip">
-                                <strong>Node #{idx}</strong> | <em>{meta.get('document_title', 'Doc')}</em> | 
-                                Page {meta.get('page_number', '1')} | Header: <code>{meta.get('header', 'General')}</code><br/>
-                                <span class="badge-rerank">Rerank Score: {node.get('rerank_score', 0):.4f}</span>
-                                <span class="badge-dense">RRF Score: {node.get('rrf_score', 0):.4f}</span>
-                                <p style="margin-top: 6px;">"{node.get('content', '')}"</p>
-                            </div>
-                            """,
-                            unsafe_allow_html=True,
-                        )
+            # if sources:
+            #     with st.expander(f"📚 Source Attribution & Reranked Contexts ({len(sources)} nodes)"):
+            #         for idx, node in enumerate(sources, start=1):
+            #             meta = node.get("metadata", {})
+            #             st.markdown(
+            #                 f"""
+            #                 <div class="source-chip">
+            #                     <strong>Node #{idx}</strong> | <em>{meta.get('document_title', 'Doc')}</em> | 
+            #                     Page {meta.get('page_number', '1')} | Header: <code>{meta.get('header', 'General')}</code><br/>
+            #                     <span class="badge-rerank">Rerank Score: {node.get('rerank_score', 0):.4f}</span>
+            #                     <span class="badge-dense">RRF Score: {node.get('rrf_score', 0):.4f}</span>
+            #                     <p style="margin-top: 6px;">"{node.get('content', '')}"</p>
+            #                 </div>
+            #                 """,
+            #                 unsafe_allow_html=True,
+            #             )
 
             st.session_state.messages.append(
                 {

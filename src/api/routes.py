@@ -164,7 +164,7 @@ def chat_with_data(request: HybridSearchRequest) -> QueryResult:
                 f"- **Primary Finding**: {top_node.content.strip()[:100]}...\n"
                 f"- Product A drove the highest revenue this quarter.\n"
             )
-            prompt_tokens = sum(len(context_str.split()) + len(request.query.split()), 50)
+            prompt_tokens = len(context_str.split()) + len(request.query.split()) + 50
             completion_tokens = len(response_text.split())
         else:
             from langchain_openai import ChatOpenAI

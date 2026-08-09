@@ -148,21 +148,31 @@ def chat_with_data(request: HybridSearchRequest) -> QueryResult:
             # Execute offline mock graphical synthesis for demonstration
             time.sleep(1.5)  # Simulate generation latency
             top_node = retrieved_nodes[0]
+            # Extract a clean first sentence from chunk content
+            raw_content = top_node.content.strip().replace("\n", " ")
+            clean_finding = raw_content[:120] + "..." if len(raw_content) > 120 else raw_content
+
             response_text = (
                 f"### 📊 Financial Analysis Summary\n"
                 f"**Source**: `{top_node.metadata.document_title}` | **Page**: `{top_node.metadata.page_number}` | **Header**: `{top_node.metadata.header}`\n\n"
+                f"---\n\n"
+                f"#### 📋 Data Table\n\n"
                 f"| Metric / Product | Value |\n"
-                f"| :--- | :--- |\n"
+                f"| :--- | ---: |\n"
                 f"| **Product A** | ₹10,00,000 |\n"
                 f"| **Product B** | ₹5,00,000 |\n"
                 f"| **Product C** | ₹7,00,000 |\n\n"
-                f"**Revenue Comparison Graph:**\n"
-                f"Product A: ██████████ (₹10,00,000)\n"
-                f"Product B: █████ (₹5,00,000)\n"
-                f"Product C: ███████ (₹7,00,000)\n\n"
-                f"#### 🔍 Key Insights:\n"
-                f"- **Primary Finding**: {top_node.content.strip()[:100]}...\n"
-                f"- Product A drove the highest revenue this quarter.\n"
+                f"---\n\n"
+                f"#### 📊 Revenue Comparison Graph\n\n"
+                f"```\n"
+                f"Product A  ██████████  ₹10,00,000\n"
+                f"Product B  █████       ₹5,00,000\n"
+                f"Product C  ███████     ₹7,00,000\n"
+                f"```\n\n"
+                f"---\n\n"
+                f"#### 🔍 Key Insights\n\n"
+                f"- **Primary Finding**: {clean_finding}\n"
+                f"- **Product A** drove the highest revenue this quarter.\n"
             )
             prompt_tokens = len(context_str.split()) + len(request.query.split()) + 50
             completion_tokens = len(response_text.split())

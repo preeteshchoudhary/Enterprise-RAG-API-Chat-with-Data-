@@ -132,65 +132,48 @@ def chat_with_data(request: HybridSearchRequest) -> QueryResult:
     )
 
     system_prompt = (
-        "You are an Expert Financial Data Analyst. Answer the user's question using ONLY the provided retrieved context. Ignore 'practice questions' or meta-text.\n\n"
-        "STRICT FORMATTING RULES:\n"
-        "1. NEVER output a wall of text. \n"
-        "2. MARKDOWN TABLES: If the data contains comparisons (products, regions, years), format it as a clean Markdown table.\n"
-        "3. VISUAL GRAPHS (MANDATORY): Whenever you compare numerical values across categories, you MUST draw a text-based bar chart below the table using the '█' block character to visually represent the proportions. \n"
-        "   Example Format:\n"
-        "   **Revenue Comparison Graph:**\n"
-        "   Product A: ██████████ (₹10,00,000)\n"
-        "   Product B: █████ (₹5,00,000)\n"
-        "   Product C: ███████ (₹7,00,000)\n"
-        "4. BULLET POINTS: Provide 1-2 key insights in bullet points at the very end.\n\n"
-        f"Context: {context_str}\n"
-        f"Question: {request.query}"
+        "You are an Expert Financial Analyst. You must format ALL numerical comparisons as a Markdown Table. "
+        "You must also draw a text-based bar chart using the █ character to represent data visually. "
+        "Never output raw unformatted text."
     )
 
     # 4. LLM Generation & Conversational Memory Assembly
     t_llm = time.perf_counter()
     response_text = ""
-    
-    messages = [{"role": "system", "content": system_prompt}]
-    if request.chat_history:
-        for turn in request.chat_history:
-            messages.append({"role": turn.role, "content": turn.content})
-    messages.append({"role": "user", "content": request.query})
-
-    prompt_tokens = sum(len(m["content"].split()) for m in messages)
+    prompt_tokens = 0
     completion_tokens = 0
 
-    if openai_client and not settings.OPENAI_API_KEY.startswith("mock"):
-        try:
-            completion = openai_client.chat.completions.create(
-                model=settings.LLM_MODEL,
-                temperature=settings.LLM_TEMPERATURE,
-                messages=messages,
-            )
-            response_text = completion.choices[0].message.content or ""
-            if completion.usage:
-                prompt_tokens = completion.usage.prompt_tokens
-                completion_tokens = completion.usage.completion_tokens
-        except Exception as e:
-            response_text = f"Context retrieved successfully. LLM synthesis error: {e}"
-    else:
-        # High-quality Data Analyst offline markdown synthesis engine
-        time.sleep(0.05)
-        top_node = retrieved_nodes[0]
-        
-        response_text = (
-            f"### 📊 Financial Analysis Summary\n"
-            f"**Source**: `{top_node.metadata.document_title}` | **Page**: `{top_node.metadata.page_number}` | **Header**: `{top_node.metadata.header}`\n\n"
-            f"#### 🔍 Key Observations:\n"
-            f"- **Primary Context Finding**: {top_node.content.strip()}\n"
-            f"- **Relevance Score**: **{top_node.rerank_score:.4f}**\n\n"
-            f"| Metric / Disclosure | Details |\n"
-            f"| :--- | :--- |\n"
-            f"| **Section Header** | `{top_node.metadata.header}` |\n"
-            f"| **Page Reference** | Page {top_node.metadata.page_number} |\n"
-            f"| **Relevance Score** | **{top_node.rerank_score:.4f}** |\n"
+    try:
+        from langchain_openai import ChatOpenAI
+        from langchain_core.messages import SystemMessage, HumanMessage
+
+        llm = ChatOpenAI(
+            model=settings.LLM_MODEL,
+            temperature=settings.LLM_TEMPERATURE,
+            api_key=settings.OPENAI_API_KEY
         )
-        completion_tokens = len(response_text.split())
+
+        messages = [SystemMessage(content=system_prompt)]
+        
+        if request.chat_history:
+            for turn in request.chat_history:
+                if turn.role == "user":
+                    messages.append(HumanMessage(content=turn.content))
+                else:
+                    messages.append(SystemMessage(content=turn.content))
+                    
+        human_content = f"Context: {context_str} \n\n Question: {request.query}"
+        messages.append(HumanMessage(content=human_content))
+
+        ai_msg = llm.invoke(messages)
+        response_text = ai_msg.content
+        
+        if hasattr(ai_msg, 'response_metadata') and 'token_usage' in ai_msg.response_metadata:
+            usage = ai_msg.response_metadata['token_usage']
+            prompt_tokens = usage.get('prompt_tokens', 0)
+            completion_tokens = usage.get('completion_tokens', 0)
+    except Exception as e:
+        response_text = f"Context retrieved successfully. LLM synthesis error: {e}"
 
     llm_ms = round((time.perf_counter() - t_llm) * 1000, 2)
     latencies["llm_generation_ms"] = llm_ms

@@ -144,34 +144,57 @@ def chat_with_data(request: HybridSearchRequest) -> QueryResult:
     completion_tokens = 0
 
     try:
-        from langchain_openai import ChatOpenAI
-        from langchain_core.messages import SystemMessage, HumanMessage
+        if settings.OPENAI_API_KEY.startswith("mock"):
+            # Execute offline mock graphical synthesis for demonstration
+            time.sleep(1.5)  # Simulate generation latency
+            top_node = retrieved_nodes[0]
+            response_text = (
+                f"### 📊 Financial Analysis Summary\n"
+                f"**Source**: `{top_node.metadata.document_title}` | **Page**: `{top_node.metadata.page_number}` | **Header**: `{top_node.metadata.header}`\n\n"
+                f"| Metric / Product | Value |\n"
+                f"| :--- | :--- |\n"
+                f"| **Product A** | ₹10,00,000 |\n"
+                f"| **Product B** | ₹5,00,000 |\n"
+                f"| **Product C** | ₹7,00,000 |\n\n"
+                f"**Revenue Comparison Graph:**\n"
+                f"Product A: ██████████ (₹10,00,000)\n"
+                f"Product B: █████ (₹5,00,000)\n"
+                f"Product C: ███████ (₹7,00,000)\n\n"
+                f"#### 🔍 Key Insights:\n"
+                f"- **Primary Finding**: {top_node.content.strip()[:100]}...\n"
+                f"- Product A drove the highest revenue this quarter.\n"
+            )
+            prompt_tokens = sum(len(context_str.split()) + len(request.query.split()), 50)
+            completion_tokens = len(response_text.split())
+        else:
+            from langchain_openai import ChatOpenAI
+            from langchain_core.messages import SystemMessage, HumanMessage
 
-        llm = ChatOpenAI(
-            model=settings.LLM_MODEL,
-            temperature=settings.LLM_TEMPERATURE,
-            api_key=settings.OPENAI_API_KEY
-        )
+            llm = ChatOpenAI(
+                model=settings.LLM_MODEL,
+                temperature=settings.LLM_TEMPERATURE,
+                api_key=settings.OPENAI_API_KEY
+            )
 
-        messages = [SystemMessage(content=system_prompt)]
-        
-        if request.chat_history:
-            for turn in request.chat_history:
-                if turn.role == "user":
-                    messages.append(HumanMessage(content=turn.content))
-                else:
-                    messages.append(SystemMessage(content=turn.content))
-                    
-        human_content = f"Context: {context_str} \n\n Question: {request.query}"
-        messages.append(HumanMessage(content=human_content))
+            messages = [SystemMessage(content=system_prompt)]
+            
+            if request.chat_history:
+                for turn in request.chat_history:
+                    if turn.role == "user":
+                        messages.append(HumanMessage(content=turn.content))
+                    else:
+                        messages.append(SystemMessage(content=turn.content))
+                        
+            human_content = f"Context: {context_str} \n\n Question: {request.query}"
+            messages.append(HumanMessage(content=human_content))
 
-        ai_msg = llm.invoke(messages)
-        response_text = ai_msg.content
-        
-        if hasattr(ai_msg, 'response_metadata') and 'token_usage' in ai_msg.response_metadata:
-            usage = ai_msg.response_metadata['token_usage']
-            prompt_tokens = usage.get('prompt_tokens', 0)
-            completion_tokens = usage.get('completion_tokens', 0)
+            ai_msg = llm.invoke(messages)
+            response_text = ai_msg.content
+            
+            if hasattr(ai_msg, 'response_metadata') and 'token_usage' in ai_msg.response_metadata:
+                usage = ai_msg.response_metadata['token_usage']
+                prompt_tokens = usage.get('prompt_tokens', 0)
+                completion_tokens = usage.get('completion_tokens', 0)
     except Exception as e:
         response_text = f"Context retrieved successfully. LLM synthesis error: {e}"
 

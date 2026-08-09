@@ -123,17 +123,22 @@ def chat_with_data(request: HybridSearchRequest) -> QueryResult:
         )
         return fallback_result
 
-    # 3. Structured Context Assembly
+    # 3. Structured Context Assembly — truncate each chunk to 800 chars to keep prompt tight
     context_str = "\n\n---\n\n".join(
         [
-            f"[Source: {node.metadata.document_title} | Page {node.metadata.page_number} | Header: {node.metadata.header}]\n{node.content}"
+            f"[Source: {node.metadata.document_title} | Page {node.metadata.page_number} | Header: {node.metadata.header}]\n{node.content[:800]}"
             for node in retrieved_nodes
         ]
     )
 
     system_prompt = (
-        "You are an Expert Financial Analyst. You must format ALL numerical comparisons as a Markdown Table. "
-        "You must also draw a text-based bar chart using the █ character to represent data visually. "
+        "You are an Elite Financial Assistant. Act like a 'pro level' analyst. You must adhere to these STRICT formatting rules:\n"
+        "1. Direct Answer Bolding: Always highlight the exact numeric answer or core fact in **BOLD** (and potentially a larger markdown header if appropriate) so it is instantly visible.\n"
+        "2. No Duplicate Data: Choose the SINGLE best format for the data (either a table, a numbered list, or a bar chart). DO NOT output the same data twice in different formats.\n"
+        "3. Markdown Tables: If a table is best, format numerical comparisons cleanly as a Markdown Table.\n"
+        "4. Vertical Line-by-Line Stacking: If you use a text bar chart (using the █ character) or a ranking list, every single item MUST be on its own separate line using explicit line breaks (\\n). Never allow items to wrap inline or side-by-side.\n"
+        "5. Explicit Sorting & Ranking: Whenever a query asks for comparisons, strictly sort the items by value (highest to lowest, or as requested) and number them sequentially (1, 2, 3...) ONLY IF you are not using a table for the same data.\n"
+        "6. Spelling Tolerance: If the user makes minor spelling or grammar mistakes, intelligently infer their intent. If the query is completely nonsensical or unrelated to the context, politely ask them to rephrase.\n"
         "Never output raw unformatted text."
     )
 
@@ -143,7 +148,8 @@ def chat_with_data(request: HybridSearchRequest) -> QueryResult:
     prompt_tokens = 0
     completion_tokens = 0
 
-        from langchain_core.messages import SystemMessage, HumanMessage
+    try:
+        from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 
         # Build message chain
         messages = [SystemMessage(content=system_prompt)]
@@ -152,7 +158,7 @@ def chat_with_data(request: HybridSearchRequest) -> QueryResult:
                 if turn.role == "user":
                     messages.append(HumanMessage(content=turn.content))
                 else:
-                    messages.append(SystemMessage(content=turn.content))
+                    messages.append(AIMessage(content=turn.content))
         human_content = f"Context:\n{context_str}\n\nQuestion: {request.query}"
         messages.append(HumanMessage(content=human_content))
 

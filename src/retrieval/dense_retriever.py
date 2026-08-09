@@ -21,21 +21,13 @@ class DenseVectorRetriever:
         collection_name: str = settings.QDRANT_COLLECTION_NAME,
     ) -> None:
         self.collection_name = collection_name
-        self.openai_client = openai_client or (
-            OpenAI(api_key=settings.OPENAI_API_KEY)
-            if settings.OPENAI_API_KEY and not settings.OPENAI_API_KEY.startswith("mock")
-            else None
-        )
-
-        # Use sentence-transformers as real local embedding model when OpenAI key is mock
-        self._use_local_model = self.openai_client is None
-        if self._use_local_model:
-            from sentence_transformers import SentenceTransformer
-            self._local_model = SentenceTransformer(settings.LOCAL_EMBEDDING_MODEL)
-            self._embedding_dim = settings.LOCAL_EMBEDDING_DIMENSION
-        else:
-            self._local_model = None
-            self._embedding_dim = settings.EMBEDDING_DIMENSION
+        # Always use local sentence-transformers for embeddings.
+        # OpenAI text-embedding-3-large requires API credits; local model is free and fast.
+        self.openai_client = None
+        self._use_local_model = True
+        self._embedding_dim = settings.LOCAL_EMBEDDING_DIMENSION
+        from sentence_transformers import SentenceTransformer
+        self._local_model = SentenceTransformer(settings.LOCAL_EMBEDDING_MODEL)
 
         if qdrant_client:
             self.qdrant = qdrant_client

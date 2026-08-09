@@ -72,7 +72,7 @@ def ask_question(question: str, expected: str, idx: int):
     res = requests.post(
         f"{API_URL}/api/v1/chat",
         json={"query": question, "top_k_rerank": 10},
-        timeout=30,
+        timeout=90,
     )
     elapsed = round((time.perf_counter() - t) * 1000, 1)
     data = res.json()

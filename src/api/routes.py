@@ -145,35 +145,35 @@ def chat_with_data(request: HybridSearchRequest) -> QueryResult:
 
     try:
         if settings.OPENAI_API_KEY.startswith("mock"):
-            # Execute offline mock graphical synthesis for demonstration
-            time.sleep(1.5)  # Simulate generation latency
-            top_node = retrieved_nodes[0]
-            # Extract a clean first sentence from chunk content
-            raw_content = top_node.content.strip().replace("\n", " ")
-            clean_finding = raw_content[:120] + "..." if len(raw_content) > 120 else raw_content
+            # Smart context-aware offline synthesizer
+            # Reads REAL retrieved chunks and formats them into structured Markdown
+            time.sleep(0.8)
 
-            response_text = (
-                f"### 📊 Financial Analysis Summary\n"
-                f"**Source**: `{top_node.metadata.document_title}` | **Page**: `{top_node.metadata.page_number}` | **Header**: `{top_node.metadata.header}`\n\n"
-                f"---\n\n"
-                f"#### 📋 Data Table\n\n"
-                f"| Metric / Product | Value |\n"
-                f"| :--- | ---: |\n"
-                f"| **Product A** | ₹10,00,000 |\n"
-                f"| **Product B** | ₹5,00,000 |\n"
-                f"| **Product C** | ₹7,00,000 |\n\n"
-                f"---\n\n"
-                f"#### 📊 Revenue Comparison Graph\n\n"
-                f"```\n"
-                f"Product A  ██████████  ₹10,00,000\n"
-                f"Product B  █████       ₹5,00,000\n"
-                f"Product C  ███████     ₹7,00,000\n"
-                f"```\n\n"
-                f"---\n\n"
-                f"#### 🔍 Key Insights\n\n"
-                f"- **Primary Finding**: {clean_finding}\n"
-                f"- **Product A** drove the highest revenue this quarter.\n"
-            )
+            sections = []
+            sections.append("### 📊 Financial Analysis Report")
+            sections.append(f"> **Query:** {request.query}\n")
+            sections.append("---")
+
+            # Collect all retrieved content, clean it, and present it
+            for i, node in enumerate(retrieved_nodes[:5], 1):
+                raw = node.content.strip().replace("\n", " ")
+                # Clean up squished text by inserting line breaks after Indian Rupee patterns
+                import re
+                raw = re.sub(r'(₹[\d,]+)', r'\n- **\1**', raw)
+                raw = re.sub(r'(\d{1,2}\.\d+%)', r'**\1**', raw)
+
+                sections.append(f"#### 📄 Source {i}: {node.metadata.header}")
+                sections.append(f"*Page {node.metadata.page_number} | {node.metadata.document_title}*\n")
+                sections.append(raw.strip())
+                sections.append("")
+
+            sections.append("---")
+            sections.append("#### 🔍 Key Insights")
+            sections.append(f"- Top {len(retrieved_nodes)} semantically relevant chunks were retrieved and ranked.")
+            sections.append(f"- Highest relevance score: **{retrieved_nodes[0].rerank_score:.4f}** (Source: Page {retrieved_nodes[0].metadata.page_number})")
+            sections.append("\n> ⚠️ *Note: Add a valid OpenAI API key in your `.env` file to enable full LLM synthesis with auto-generated tables and bar charts.*")
+
+            response_text = "\n".join(sections)
             prompt_tokens = len(context_str.split()) + len(request.query.split()) + 50
             completion_tokens = len(response_text.split())
         else:

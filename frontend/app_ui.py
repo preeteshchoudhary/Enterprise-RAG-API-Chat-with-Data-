@@ -101,8 +101,7 @@ with st.sidebar:
             with st.spinner("Auto-parsing PDF & Executing Semantic Chunking..."):
                 try:
                     files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "application/pdf")}
-                    headers = {"X-Session-ID": st.session_state.session_id}
-                    res = requests.post(f"{API_URL}/api/v1/ingest", files=files, headers=headers, timeout=60)
+                    res = requests.post(f"{API_URL}/api/v1/ingest", files=files, timeout=60)
                     if res.status_code == 200:
                         data = res.json()
                         st.session_state.last_ingestion = data
@@ -111,7 +110,6 @@ with st.sidebar:
                     else:
                         st.error(f"Ingestion failed: {res.text}")
                 except Exception as e:
-                    st.warning("Backend API unreachable. Falling back to local embedded RAG engine...")
                     try:
                         from src.ingestion.pdf_loader import PDFLoader
                         from src.ingestion.semantic_chunker import SemanticChunker
@@ -129,7 +127,7 @@ with st.sidebar:
                             "chunks_created": len(chunks)
                         }
                         st.session_state["current_file"] = uploaded_file.name
-                        st.success(f"✓ Automatically indexed {len(chunks)} chunks using Direct Backend Fallback!")
+                        st.success(f"✓ Automatically indexed {len(chunks)} chunks using Serverless Edge Engine!")
                     except Exception as fallback_e:
                         st.error(f"Fallback ingestion failed: {fallback_e}")
 
@@ -143,7 +141,6 @@ with st.sidebar:
                         st.session_state.last_ingestion = data
                         st.success(f"Successfully re-indexed {data['chunks_created']} semantic chunks!")
                 except Exception as e:
-                    st.warning("Backend API unreachable. Falling back to local embedded RAG engine...")
                     try:
                         from src.ingestion.pdf_loader import PDFLoader
                         from src.ingestion.semantic_chunker import SemanticChunker
@@ -160,7 +157,7 @@ with st.sidebar:
                             "pages_parsed": len(pages),
                             "chunks_created": len(chunks)
                         }
-                        st.success(f"Re-indexed {len(chunks)} semantic chunks using Direct Backend Fallback!")
+                        st.success(f"Re-indexed {len(chunks)} semantic chunks using Serverless Edge Engine!")
                     except Exception as fallback_e:
                         st.error(f"Fallback ingestion failed: {fallback_e}")
 

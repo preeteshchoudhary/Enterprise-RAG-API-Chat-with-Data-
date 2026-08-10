@@ -275,9 +275,14 @@ if prompt := st.chat_input("Ask a question about financial disclosures, revenues
                 except Exception as fallback_e:
                     response_text = f"Fallback API Error: {fallback_e}"
                     telemetry = None
-                    sources = []
+            # Parse XML tags if present to display clean final_answer on UI
+            display_text = response_text
+            if "<final_answer>" in response_text and "</final_answer>" in response_text:
+                display_text = response_text.split("<final_answer>")[1].split("</final_answer>")[0].strip()
+            elif "<final_answer>" in response_text:
+                display_text = response_text.split("<final_answer>")[1].strip()
 
-            st.markdown(response_text)
+            st.markdown(display_text)
             
             # --- UI Cleanup: Hiding telemetry and raw sources from the frontend ---
             # if telemetry:
@@ -309,7 +314,7 @@ if prompt := st.chat_input("Ask a question about financial disclosures, revenues
             st.session_state.messages.append(
                 {
                     "role": "assistant",
-                    "content": response_text,
+                    "content": display_text,
                     "telemetry": telemetry,
                     "sources": sources,
                 }
